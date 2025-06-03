@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>Polygon Balls</title>
+<style>
+  body { margin:0; background:#111; color:white; font-family:Arial; }
+  #controls { position:fixed; top:10px; left:10px; z-index:10; }
+  button { margin-right:5px; }
+  canvas { display:block; }
+</style>
+</head>
+<body>
+<div id="controls">
+  <button id="add">增加</button>
+  <button id="remove">减少</button>
+  <button id="clear">清除</button>
+  <button id="create">创建</button>
+  <label>转速: <input type="range" id="speed" min="0" max="2" step="0.1" value="1"></label>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+<script>
+let Engine = Matter.Engine,
+    World = Matter.World,
+    Bodies = Matter.Bodies,
+    Body = Matter.Body,
+    Composite = Matter.Composite;
+
+let engine;
+let world;
+let polygons = [];
+let baseSpeeds = [];
+let balls = [];
+let trails = [];
+let center;
+let speedFactor = 1;
+
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+  engine = Engine.create();
+  world = engine.world;
+  engine.gravity.y = 1;
+  center = {x: width/2, y: height/2};
+
+  const sides = 8;
+  const startR = 50;
+  const step = 60;
+  for(let i=0;i<5;i++){
+    let r = startR + step*i;
+    let edges = [];
+    let skip = (i===4)? -1 : Math.floor(Math.random()*sides);
+    for(let j=0;j<sides;j++){
+      if(j===skip) continue;
+      let a1 = TWO_PI/sides*j;
+      let a2 = TWO_PI/sides*(j+1);
+      let x1 = center.x + r*cos(a1);
+      let y1 = center.y + r*sin(a1);
+      let x2 = center.x + r*cos(a2);
+      let y2 = center.y + r*sin(a2);
+      let midx = (x1+x2)/2;
+      let midy = (y1+y2)/2;
+      let len = dist(x1,y1,x2,y2);
+      let ang = atan2(y2-y1,x2-x1);
+      let edge = Bodies.rectangle(midx, midy, len, 8, {isStatic:true, restitution:1, friction:0});
+      Body.setAngle(edge, ang);
+      edges.push(edge);
+      World.add(world, edge);
+    }
+    polygons.push(edges);
+    baseSpeeds.push((random()>0.5?1:-1)*(0.005+random()*0.01));
+  }
+
+  addBall();
+
+  document.getElementById('add').onclick = addBall;
+  document.getElementById('remove').onclick = removeBall;
+  document.getElementById('clear').onclick = clearBalls;
+  document.getElementById('create').onclick = function(){
+    clearBalls();
+    for(let i=0;i<10;i++) addBall();
+  };
+  document.getElementById('speed').oninput = function(){
+    speedFactor = this.value;
+  };
+}
+
+function addBall(){
+  let body = Bodies.circle(center.x, center.y, 10, {restitution:0.9});
+  World.add(world, body);
+  let col = color(random(255), random(255), random(255));
+  balls.push({body:body, col:col});
+  trails.push([]);
+}
+
+function removeBall(){
+  for(let k=0;k<2;k++){
+    let b = balls.pop();
+    if(!b) return;
+    World.remove(world, b.body);
+    trails.pop();
+  }
+}
+
+function clearBalls(){
+  balls.forEach(b=>World.remove(world,b.body));
+  balls=[];
+  trails=[];
+}
+
+function draw(){
+  background(17);
+  Engine.update(engine,1000/60);
+
+  for(let p=0;p<polygons.length;p++){
+    let edges = polygons[p];
+    let speed = baseSpeeds[p]*speedFactor;
+    edges.forEach(e=>Body.rotate(e, speed));
+  }
+
+  // store trails
+  for(let i=0;i<balls.length;i++){
+    let pos = balls[i].body.position;
+    let t = trails[i];
+    t.push({x:pos.x,y:pos.y});
+    if(t.length>20) t.shift();
+  }
+
+  noFill();
+  strokeWeight(2);
+  // draw trails
+  for(let i=0;i<trails.length;i++){
+    let t = trails[i];
+    for(let j=1;j<t.length;j++){
+      let a = map(j,1,t.length,50,200);
+      stroke(red(balls[i].col), green(balls[i].col), blue(balls[i].col), a);
+      line(t[j-1].x, t[j-1].y, t[j].x, t[j].y);
+    }
+  }
+
+  // draw polygons
+  stroke(200);
+  for(let edges of polygons){
+    for(let e of edges){
+      let v = e.vertices;
+      line(v[0].x,v[0].y,v[1].x,v[1].y);
+    }
+  }
+
+  // draw balls
+  noStroke();
+  for(let b of balls){
+    fill(b.col);
+    circle(b.body.position.x, b.body.position.y, 20);
+  }
+}
+</script>
+</body>
+</html>
