@@ -16,7 +16,7 @@
   <button id="remove">减少</button>
   <button id="clear">清除</button>
   <button id="create">创建</button>
-  <label>转速: <input type="range" id="speed" min="0" max="2" step="0.1" value="1"></label>
+  <label>转速: <input type="range" id="speed" min="0" max="5" step="0.1" value="1"></label>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
@@ -30,7 +30,6 @@ let Engine = Matter.Engine,
 let engine;
 let world;
 let polygons = [];
-let baseSpeeds = [];
 let balls = [];
 let trails = [];
 let center;
@@ -46,29 +45,29 @@ function setup() {
   const sides = 8;
   const startR = 50;
   const step = 60;
-  for(let i=0;i<5;i++){
-    let r = startR + step*i;
-    let edges = [];
-    let skip = (i===4)? -1 : Math.floor(Math.random()*sides);
-    for(let j=0;j<sides;j++){
-      if(j===skip) continue;
-      let a1 = TWO_PI/sides*j;
-      let a2 = TWO_PI/sides*(j+1);
-      let x1 = center.x + r*cos(a1);
-      let y1 = center.y + r*sin(a1);
-      let x2 = center.x + r*cos(a2);
-      let y2 = center.y + r*sin(a2);
-      let midx = (x1+x2)/2;
-      let midy = (y1+y2)/2;
-      let len = dist(x1,y1,x2,y2);
-      let ang = atan2(y2-y1,x2-x1);
-      let edge = Bodies.rectangle(midx, midy, len, 8, {isStatic:true, restitution:1, friction:0});
+  for (let i = 0; i < 5; i++) {
+    let r = startR + step * i;
+    let poly = { radius: r, sides: sides, edges: [], angle: 0 };
+    poly.speed = (random() > 0.5 ? 1 : -1) * (0.005 + random() * 0.01);
+    let skip = (i === 4) ? -1 : Math.floor(Math.random() * sides);
+    for (let j = 0; j < sides; j++) {
+      if (j === skip) continue;
+      let a1 = TWO_PI / sides * j;
+      let a2 = TWO_PI / sides * (j + 1);
+      let x1 = center.x + r * cos(a1);
+      let y1 = center.y + r * sin(a1);
+      let x2 = center.x + r * cos(a2);
+      let y2 = center.y + r * sin(a2);
+      let midx = (x1 + x2) / 2;
+      let midy = (y1 + y2) / 2;
+      let len = dist(x1, y1, x2, y2);
+      let ang = atan2(y2 - y1, x2 - x1);
+      let edge = Bodies.rectangle(midx, midy, len, 8, { isStatic: true, restitution: 1, friction: 0 });
       Body.setAngle(edge, ang);
-      edges.push(edge);
+      poly.edges.push({ body: edge, index: j });
       World.add(world, edge);
     }
-    polygons.push(edges);
-    baseSpeeds.push((random()>0.5?1:-1)*(0.005+random()*0.01));
+    polygons.push(poly);
   }
 
   addBall();
@@ -81,12 +80,12 @@ function setup() {
     for(let i=0;i<10;i++) addBall();
   };
   document.getElementById('speed').oninput = function(){
-    speedFactor = this.value;
+    speedFactor = parseFloat(this.value);
   };
 }
 
 function addBall(){
-  let body = Bodies.circle(center.x, center.y, 10, {restitution:0.9});
+  let body = Bodies.circle(center.x, center.y, 8, {restitution:0.9});
   World.add(world, body);
   let col = color(random(255), random(255), random(255));
   balls.push({body:body, col:col});
@@ -110,12 +109,25 @@ function clearBalls(){
 
 function draw(){
   background(17);
-  Engine.update(engine,1000/60);
+  Engine.update(engine, 1000/60);
 
-  for(let p=0;p<polygons.length;p++){
-    let edges = polygons[p];
-    let speed = baseSpeeds[p]*speedFactor;
-    edges.forEach(e=>Body.rotate(e, speed));
+  for (let poly of polygons) {
+    poly.angle += poly.speed * speedFactor;
+    for (let info of poly.edges) {
+      let j = info.index;
+      let r = poly.radius;
+      let a1 = TWO_PI / poly.sides * j + poly.angle;
+      let a2 = TWO_PI / poly.sides * (j + 1) + poly.angle;
+      let x1 = center.x + r * cos(a1);
+      let y1 = center.y + r * sin(a1);
+      let x2 = center.x + r * cos(a2);
+      let y2 = center.y + r * sin(a2);
+      let midx = (x1 + x2) / 2;
+      let midy = (y1 + y2) / 2;
+      let ang = atan2(y2 - y1, x2 - x1);
+      Body.setPosition(info.body, { x: midx, y: midy });
+      Body.setAngle(info.body, ang);
+    }
   }
 
   // store trails
@@ -140,10 +152,10 @@ function draw(){
 
   // draw polygons
   stroke(200);
-  for(let edges of polygons){
-    for(let e of edges){
-      let v = e.vertices;
-      line(v[0].x,v[0].y,v[1].x,v[1].y);
+  for (let poly of polygons) {
+    for (let eInfo of poly.edges) {
+      let v = eInfo.body.vertices;
+      line(v[0].x, v[0].y, v[1].x, v[1].y);
     }
   }
 
@@ -151,7 +163,7 @@ function draw(){
   noStroke();
   for(let b of balls){
     fill(b.col);
-    circle(b.body.position.x, b.body.position.y, 20);
+    circle(b.body.position.x, b.body.position.y, 16);
   }
 }
 </script>
